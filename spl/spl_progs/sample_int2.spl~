@@ -1,0 +1,104 @@
+//calculating physical sp since in kernel mode
+alias physicalSP S0;                                                           //leave S0,S1,S2,S3,S4
+physicalSP=([PTBR+2*(SP/512)]*512)+SP%512;
+
+// getting system callno and arguments-------
+alias systemcalno S1;
+systemcalno=[physicalSP-1];
+alias arg1 S2;
+arg1=[physicalSP-3];
+//-------------------
+
+//if system call is for open()----
+if(systemcalno==2) then
+			//step1: checking if the file exists-------
+	alias i S3;
+	i=0;
+	R1=0;
+	while( i <= 63) do
+		if([FAT+(i*8)]==arg1) then
+			R1=1;		//found a filename exists with FAT entry i
+			break;
+		endif;		
+		i = i + 1;
+	endwhile;		
+	if(R1==1) then
+                    alias FATentry S4;
+		FATentry=i; //storing fat entry in a register
+		
+		alias wide_entry R0;
+		//step2:checking for fat-entry in system wide open file table and updating if doesn't exist	
+		i=0;
+		R1=0;
+		while (i<128) do                //64 entries each of size 2 words
+			if([FILE_TABLE+i+0]==FATentry) then//FAT index matches/not with FAT entry found in FAT table for the file
+			                                //file already opened
+				wide_entry=(i/2);
+				R1=1;
+				break;
+			endif;
+			i=i+2;		//each entry is two words
+		endwhile;
+		
+		alias  curr_pid R4;//to get currPCB
+		curr_pid=(PTBR-1024)/8;
+		
+		alias currPCB R3;
+		currPCB=READY_LIST+32*curr_pid;
+		print(currPCB);
+		i=0;
+		while (i<16) do //getting an empty per-process file table entry
+			if([currPCB+15+i]==-1)then
+				break;
+			endif; 
+			i=i+2;
+		endwhile;
+		
+		if(i>=16) then 
+			[physicalSP-2]=-1;
+			ireturn;
+		endif;
+		
+		alias per_process_open_ind S6;
+		per_process_open_ind=i/2;
+		if(R1!=1) then
+		//check for a empty slot in system wide open file table
+			i=0;
+			R1=0;
+			while (i<128) do
+				if([FILE_TABLE+i+0]==-1) then
+					wide_entry=(i/2);
+					R1=1;
+					break;
+				endif;
+				i=i+2;	 
+			endwhile;
+			print("bhanu prakash");
+			if(R1!=1) then
+				print("here");
+				[physicalSP-2]=-1; //no free entry in system wide open file table			
+				ireturn;
+			endif;		
+		endif;
+		
+		[currPCB+per_process_open_ind*2]=wide_entry; //setting system wide open file table entry
+		[currPCB+per_process_open_ind*2+1]=0; //setting lseek to 0
+		
+		[FILE_TABLE+wide_entry*2+0]=FATentry;//updating system wide open file table entry with FATentry of file
+		[FILE_TABLE+wide_entry*2+1]=[FILE_TABLE+wide_entry*2+1]+1;//updating count of open instances of file
+		
+		print(per_process_open_ind);
+		[physicalSP-2]=per_process_open_ind; //return value
+		ireturn;
+		//---------------------------
+	else
+	    [physicalSP-2]=-1; //file doesn't exist to open() therefore return -1
+	    ireturn;
+	endif;
+endif;
+//--------------------------
+//if system call is for delete
+if(systemcalno==4) then
+	print("still to be updated");
+endif;
+ireturn;

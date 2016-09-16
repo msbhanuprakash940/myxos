@@ -1,0 +1,75 @@
+load(7,1);                       //exception handler
+load(8,2);
+/////////////////////////////
+load(23,17);                     //int 7 routine 
+load(24,18);
+//////////////////////////
+[READY_LIST + 0] = 0;            //pcb pid of init =zero though pcb updation for a single process is not required
+//////////////////////////
+load(25,21); // init Load 1st page of code from disk to memory
+load(26,22); // Load 2nd page of code from disk to memory
+load(27,23); // Load 3rd page of code from disk to memory
+PTBR = 1024; 
+PTLR = 4;
+[PTBR + 0] = 25; // Physical Page Number for Logical Page 0
+[PTBR + 1] = "01"; // Auxiliary Information for Logical Page 0
+[PTBR + 2] = 26; // Physical Page Number for Logical Page 1
+[PTBR + 3] = "01"; // Physical Page Number for Logical Page 1
+[PTBR + 4] = 27; // Physical Page Number for Logical Page 2
+[PTBR + 5] = "01"; // Physical Page Number for Logical Page 2
+[PTBR + 6] = 28; // Physical Page Number for Logical Page 3 (Stack)
+[PTBR + 7] = "01"; // Auxiliary Information for Logical Page 3 (Stack)
+[READY_LIST + 1] = 2; // Sets the entry for STATE as Running 
+SP = 3 * 512; 
+[28 * 512] = 0; // Set up the IP value for INIT in the stack 
+
+
+//load FAT from disk blk 19 to 5
+load (5,19);
+
+//Load Disk Free List from the disk block 20 to memory page 6
+load (6,20);
+
+//initialising sysytem wide open file table,with fat index=-1 and file open count=0 since no file is open yet
+
+alias count S1;
+count=0;
+
+while (count<128) do                //64 entries each of size 2 words
+	[FILE_TABLE+count+0]=-1;	//FAT index to -1
+	[FILE_TABLE+count+1]= 0;	//file open count as 0
+	count=count+2;		//each entry is two words
+endwhile;	
+////////////////////////////////////////////
+
+//////////setting the per-process open file table entries of init process to invalid since it is the only process and no file is opened
+alias initPCB S1;
+initPCB=READY_LIST+0*32;
+
+alias count S2;
+count=0;
+
+while (count<16) do
+	[initPCB+15+count]=-1 ;//setting system wide open file table entry as -1
+	[initPCB+15+count+1]=-1 ;//Lseek as -1
+	count=count+2;
+endwhile;	
+//////////////////////////////////
+
+// Load Interrupt 1 Routine from disk to memory
+load (11, 5);
+load (12, 6);
+
+// Load Interrupt 2 Routine from disk to memory
+load (13, 7);
+load (14, 8);
+
+// Load Interrupt 1 Routine from disk to memory
+load (15, 9);
+load (16, 10);
+
+// Load Interrupt 1 Routine from disk to memory
+load (17, 11);
+load (18, 12);
+ireturn; 
+

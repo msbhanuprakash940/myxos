@@ -1,0 +1,65 @@
+//context switching has to happen copy all registser values of currently running process to its pcb and load next ready process
+//calculating currently running process pid
+alias currentPID S0;
+currentPID=(PTBR-1024)/8;
+
+//calculating currently running  pcb location
+alias currentPCB S1;
+currentPCB = READY_LIST + 32 * currentPID;
+[ currentPCB + 1 ] = 1; // Set STATE to READY since after context switch this process has to wait
+
+//copying registers to stack
+[ currentPCB + 2 ] = BP;
+[ currentPCB + 3 ] = SP - 1; //sp-1 because interrupt saves ip value on top of stack so actual sp is 1 minus
+
+//for getting actual physical address corresponding to logical address of sp
+alias physicalSP S2;
+physicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512); 
+[ currentPCB + 4 ] = [ physicalSP ]; // Save IP of current process in the PCB from the stack
+[ currentPCB + 5 ] = PTBR;
+[ currentPCB + 6 ] = PTLR ; 
+[ currentPCB + 7 ] = R0;
+[ currentPCB + 8 ] = R1;
+[ currentPCB + 9 ] = R2;
+[ currentPCB + 10 ] = R3;
+[ currentPCB + 11 ] = R4;
+[ currentPCB + 12 ] = R5;
+[ currentPCB + 13 ] = R6;
+[ currentPCB + 14 ] = R7;
+
+//roundrobin to get next process pid which is in ready state after current process
+alias i S4;
+i=currentPID+1;
+i=i%32;
+while ([READY_LIST+(32*i)+1]!=1) do
+	i=i+1;
+	i=i%32;
+      endwhile;	
+alias newPCB S1;
+newPCB=READY_LIST + 32 * i;
+//copying back register contents of newly arrived process
+BP=[ newPCB + 2 ];
+SP=[ newPCB + 3 ];
+PTBR=[ newPCB + 5];
+PTLR=[ newPCB + 6 ];
+R0=[ newPCB + 7 ];
+R1=[ newPCB + 8];
+R2=[ newPCB + 9 ];
+R3=[ newPCB + 10 ];
+R4=[ newPCB + 11 ];
+R5=[ newPCB + 12 ];
+R6=[ newPCB + 13 ];
+R7=[ newPCB + 14 ];
+
+//storing ip value on top of stack of new process so that ip is indirectly set by ireturn instruction so sp is logical address which we brought from pcb ,but now we are in kernel mode therefore get physical sp address value and store ip value on stack
+SP = SP + 1;
+alias newphysicalSP S2;
+newphysicalSP = ([PTBR + 2 * (SP / 512)] * 512) + (SP % 512);
+[ newphysicalSP ] = [ newPCB + 4 ]; // Stores IP field value of PCB on the stack 
+[newPCB+1]=2;
+ireturn;
+
+
+
+
+

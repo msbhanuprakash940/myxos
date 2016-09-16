@@ -1,0 +1,82 @@
+//calculating physical sp since in kernel mode
+alias physicalSP S0;
+physicalSP=([PTBR+2*(SP/512)]*512)+SP%512;
+
+// getting system callno and arguments-------
+alias systemcalno S1;
+systemcalno=[physicalSP-1];
+alias arg1 S2;
+arg1=[physicalSP-3];
+//-------------------
+
+//if system call is for create()----
+if(systemcalno==1) then
+			//checking if the file already exists-------
+	alias i S3;
+	i=0;
+	R1=0;
+	while( i <= 63) do
+		if([FAT+(i*8)]==arg1) then
+			R1=1;		//found a filename already exists
+			break;
+		endif;		
+		i = i + 1;
+	endwhile;		
+	if(R1==1)then
+		[physicalSP-2]=0; //return value 0 if a file already existing
+	//------------
+	else
+			//if file doen't exists then search for a empty block by checking disk free list from disk blk from[24-447]
+	     i=24;
+	     while(i<=447)do
+	     	if([DISK_LIST+i]==0) then
+	     	     break;
+	     	endif;
+	     	i=i+1;
+	     endwhile;	
+	     alias freeblk R3;
+	     freeblk=i;
+	     if(i>447) then
+	                 [physicalSP-2]=-1; //if no free block is found return -1
+	     else
+	     	i=0;
+	     	R1=0;
+	     	while( i <= 63) do
+			if([FAT+(i*8)+2]==-1) then
+				R1=1;		//finding for free fat entry with basic block field indicating -1
+				break;
+			endif;		
+			i = i + 1;
+		endwhile;
+		alias freefat S4;
+		freefat=i;
+		if(R1==0) then
+			[physicalSP-2]=-1; //return value -1 no empty fat entry could be found disk is filled	
+		else
+			[FAT+(i*8)]=arg1;//setting the free fat entry with given filename arg
+			[FAT+(i*8)+1]=0; //file size initialised to 0
+			[FAT+(i*8)+2]=freeblk; //basic block number field updated
+			
+			load(1,freeblk);	//loading the basic block to scratch pad page1 i.e os_startup code
+			i=512;
+			while(i<=1023) do   //using the scratchpad to make the entries of basic block -1
+				[i]=-1;
+			      i=i+1;	
+			endwhile;
+			store(1,freeblk);  //reflecting the change on the basic block in the disk
+			
+			[DISK_LIST+freeblk]=1; //updating disk free list that freeblk( i.e basic blk ) is occupied 
+			
+			store(5,19); //updating the FAT and disk free list in the disk			
+			store(6,20);
+			[physicalSP-2]=0; //return value 0 as success
+		endif;
+	      endif;
+	endif;
+endif;
+
+//if system call is for delete
+if(systemcalno==4) then
+	print("still to be updated");
+endif;
+ireturn;

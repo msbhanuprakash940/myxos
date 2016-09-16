@@ -1,0 +1,8 @@
+// APL program to invoke Create
+
+integer main()
+{	
+	integer a;
+	a = Create("File");
+	return 0;
+}
